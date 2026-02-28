@@ -15,8 +15,8 @@ and python has a lot of natural overhead, especially with bitwise operations. Th
 **Speed After Rewrite:**
 | Algorithm | Encode | Decode |
 |---|---|---|
-| RLE | 200-1700 MB/s | 1000-2700 MB/s |
-| LZ77 | not implemented | not implemented |
+| RLE | 350-420 MB/s | 600-700 MB/s |
+| LZ77 | 45-130 MB/s | 450-560 MB/s |
 | Huffman | not implemented | not implemented |
 | Delta | not implmeneted | not implemented |
 

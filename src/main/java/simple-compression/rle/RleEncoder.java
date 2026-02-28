@@ -4,7 +4,7 @@ public class RleEncoder {
 
     private RleEncoder() {}
 
-    /** this is the encode method. it does PackBits style RLE encoding
+    /** this is the encode method. it does PackBits style RLE encoding.
      *
      * @param data the raw byte array to compress
      * @return an RLE encoded byte array

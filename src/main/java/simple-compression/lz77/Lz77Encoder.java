@@ -16,7 +16,6 @@ public class Lz77Encoder {
     private Lz77Encoder() {}
 
     /** this is the encode method. it does lz77 style compression using a hash chain to find back-references.
-     * this method has an optional integer argument that specifies the maximum candidates for matching
      *
      * @param data the raw byte array to compress
      * @return an lz77 encoded byte array
@@ -26,6 +25,12 @@ public class Lz77Encoder {
         return encode(data, 8);
     }
 
+    /** this is the encode method. it does lz77 style compression with a configurable candidate limit.
+     *
+     * @param data          the raw byte array to compress
+     * @param maxCandidates the maximum number of hash-chain candidates to check per position
+     * @return an lz77 encoded byte array
+     */
     public static byte[] encode(byte[] data, int maxCandidates) {
         int windowSize = 4096;
         int minMatch = 3;
@@ -51,13 +56,13 @@ public class Lz77Encoder {
 
         int slotSize = maxCandidates + 1;
         int[] index = new int[TABLE_SIZE * slotSize]; //flat 1D array, tighter layout for prefetcher
-
         byte[] encoded = new byte[data.length * 2];
-        encoded[encodedCursor++] = 0;
 
         if (data.length == 0) {
             throw new IllegalArgumentException("there is no data to compress. the bytearray passed is empty.");
         }
+
+        encoded[encodedCursor++] = 0;
 
         while (cursor < data.length) {
             if ((cursor - windowSize) > 0) { //keeps window in check as the loop progresses
@@ -145,13 +150,28 @@ public class Lz77Encoder {
         return Arrays.copyOf(encoded, encodedCursor); //convert to byte[] for output
     }
 
-    private static int hash(byte[] data, int cursor) { //knuth multiplicative hash over 3 bytes into table index
+    /** this is the hash method. it computes a knuth multiplicative hash over 3 bytes into a table index.
+     *
+     * @param data   the input byte array
+     * @param cursor the position of the first byte of the trigram
+     * @return a table index in the range [0, TABLE_SIZE)
+     */
+    private static int hash(byte[] data, int cursor) {
         int v = (data[cursor] & 0xFF)
               | ((data[cursor + 1] & 0xFF) << 8)
               | ((data[cursor + 2] & 0xFF) << 16);
         return (v * 0x9E3779B1) >>> (32 - TABLE_BITS) & TABLE_MASK;
     }
 
+    /** this is the extendMatch method. it computes the length of the longest common prefix between
+     * two positions in the data array, reading 8 bytes at a time via a long view for speed.
+     *
+     * @param data      the input byte array
+     * @param candPos   the start of the candidate (back-reference) match
+     * @param headStart the start of the current lookahead position
+     * @param limit     the maximum number of bytes to compare
+     * @return the number of matching bytes
+     */
     private static int extendMatch(byte[] data, int candPos, int headStart, int limit) {
         int j = 0;
         while (j + 8 <= limit) { //compare 8 bytes at a time as a long

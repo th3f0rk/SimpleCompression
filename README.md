@@ -49,8 +49,6 @@ In the future we will consider adding algorithms such as ANS entropy coding.
 
 ## Current Roadmap
 
-- write tests for RLE
-- implement LZ77 with tests
 - implement Huffman with tests
 - implement Delta with tests
 - rewrite and adjust probe logic from python version

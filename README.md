@@ -22,24 +22,6 @@ and python has a lot of natural overhead, especially with bitwise operations. Th
 
 ---
 
-## Planned Usage
-
-The plan is to keep the api as similar as possible.
-
-```java
-//manual sequencing
-SimpleCompression compressor = new SimpleCompression(data):
-byte[] encoded = compressor.encode("rle", "lz77", "huffman");
-
-//probe sequencing
-byte[] encoded = compressor.encode();
-
-//universal decode regardless of sequence
-byte[] decoded = Compression.decode(encoded);
-```
-
----
-
 ## Planned Algorithms
 
 For v1.0.0 release we plan to have full feature parity with the python implementation as well as adding in a Delta-Encoding algorithm. 

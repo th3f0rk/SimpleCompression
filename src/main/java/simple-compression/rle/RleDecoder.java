@@ -2,26 +2,23 @@ import java.util.Arrays;
 
 public class RleDecoder {
 
-    private byte[] data;
-
-    public RleDecoder (byte[] data) {
-        this.data = data;
-    }
+    private RleDecoder() {}
 
     /** this is the decode method. it takes PackBits style RLE encoded data and reconstructs the original bytes
      *
-     * @return decoded - returns the original uncompressed byte array
+     * @param data the RLE encoded byte array to decompress
+     * @return the original uncompressed byte array
      */
-    public byte[] decode() {
+    public static byte[] decode(byte[] data) {
         int outputSize = 0;
         int index = 0;
 
-        if (this.data.length == 0) {
+        if (data.length == 0) {
             throw new IllegalArgumentException("there is no data to decompress. the bytearray passed is empty.");
         }
 
-        while (index < this.data.length) {
-            int header = (int) this.data[index];
+        while (index < data.length) {
+            int header = (int) data[index];
 
             if (header >= 0) { //literal block
                 int count = header + 1;
@@ -38,17 +35,17 @@ public class RleDecoder {
         int position = 0;
         index = 0;
 
-        while (index < this.data.length) {
-            int header = (int) this.data[index];
+        while (index < data.length) {
+            int header = (int) data[index];
 
             if (header >= 0) { //literal block
                 int count = header + 1;
-                System.arraycopy(this.data, index + 1, decoded, position, count);
+                System.arraycopy(data, index + 1, decoded, position, count);
                 position += count;
                 index += 1 + count;
             } else { //run block
                 int count = 1 - header;
-                byte runByte = this.data[index + 1];
+                byte runByte = data[index + 1];
                 Arrays.fill(decoded, position, position + count, runByte);
                 position += count;
                 index += 2;

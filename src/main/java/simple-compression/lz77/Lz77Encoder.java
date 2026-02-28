@@ -4,11 +4,6 @@ import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 
 public class Lz77Encoder {
-    private byte[] data;
-    private int windowSize;
-    private int minMatch;
-    private int maxMatch;
-    private int maxCandidates;
 
     private static final int TABLE_BITS = 13;
     private static final int TABLE_SIZE = 1 << TABLE_BITS;
@@ -18,45 +13,24 @@ public class Lz77Encoder {
     private static final VarHandle LONG_VIEW =
         MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
-    public Lz77Encoder (byte[] data) {
-        this(data, 8);
+    private Lz77Encoder() {}
+
+    /** this is the encode method. it does lz77 style compression using a hash chain to find back-references.
+     * this method has an optional integer argument that specifies the maximum candidates for matching
+     *
+     * @param data the raw byte array to compress
+     * @return an lz77 encoded byte array
+     * @see #encode(byte[], int)
+     */
+    public static byte[] encode(byte[] data) {
+        return encode(data, 8);
     }
 
-    public Lz77Encoder (byte[] data, int maxCandidates) {
-        this.data = data;
-        this.windowSize = 4096;
-        this.minMatch = 3;
-        this.maxMatch = 255;
-        this.maxCandidates = maxCandidates;
-    }
+    public static byte[] encode(byte[] data, int maxCandidates) {
+        int windowSize = 4096;
+        int minMatch = 3;
+        int maxMatch = 255;
 
-    private int hash(int cursor) { //knuth multiplicative hash over 3 bytes into table index
-        int v = (this.data[cursor] & 0xFF)
-              | ((this.data[cursor + 1] & 0xFF) << 8)
-              | ((this.data[cursor + 2] & 0xFF) << 16);
-        return (v * 0x9E3779B1) >>> (32 - TABLE_BITS) & TABLE_MASK;
-    }
-
-    private int extendMatch(int candPos, int headStart, int limit) {
-        int j = 0;
-        while (j + 8 <= limit) { //compare 8 bytes at a time as a long
-            long a = (long) LONG_VIEW.get(data, candPos + j);
-            long b = (long) LONG_VIEW.get(data, headStart + j);
-            if (a != b) {
-                //find first differing byte within this long via trailing zero bits
-                j += Long.numberOfTrailingZeros(a ^ b) >> 3;
-                return j;
-            }
-            j += 8;
-        }
-        while (j < limit) { //byte by byte for the remaining tail
-            if (data[candPos + j] != data[headStart + j]) break;
-            j++;
-        }
-        return j;
-    }
-
-    public byte[] encode() {
         int cursor = 0;
         int tailStart;
         int tailEnd;
@@ -75,32 +49,36 @@ public class Lz77Encoder {
         int encodedCursor = 0;
         int step = 0;
 
-        int slotSize = this.maxCandidates + 1;
+        int slotSize = maxCandidates + 1;
         int[] index = new int[TABLE_SIZE * slotSize]; //flat 1D array, tighter layout for prefetcher
 
-        byte[] encoded = new byte[this.data.length * 2];
+        byte[] encoded = new byte[data.length * 2];
         encoded[encodedCursor++] = 0;
 
-        while (cursor < this.data.length) {
-            if ((cursor - this.windowSize) > 0) { //keeps window in check as the loop progresses
-                tailStart = cursor - this.windowSize;
+        if (data.length == 0) {
+            throw new IllegalArgumentException("there is no data to compress. the bytearray passed is empty.");
+        }
+
+        while (cursor < data.length) {
+            if ((cursor - windowSize) > 0) { //keeps window in check as the loop progresses
+                tailStart = cursor - windowSize;
             } else { //base case for the start of the loop
                 tailStart = 0;
             }
 
             tailEnd = cursor; //tail is the look back window
             headStart = cursor; //head is the look ahead window
-            maxEnd = headStart + this.maxMatch;
+            maxEnd = headStart + maxMatch;
 
-            if (maxEnd < this.data.length) {
+            if (maxEnd < data.length) {
                 headEnd = maxEnd;
             } else {
-                headEnd = this.data.length;
+                headEnd = data.length;
             }
 
             int slotBase = 0;
-            if ((cursor + 2) < this.data.length) { //if at least 3 bytes left form trigram and lookup past positions within tail range
-                slotBase = hash(cursor) * slotSize;
+            if ((cursor + 2) < data.length) { //if at least 3 bytes left form trigram and lookup past positions within tail range
+                slotBase = hash(data, cursor) * slotSize;
                 candCounter = index[slotBase];
             } else { //not enough bytes left in input to form trigram
                 candCounter = 0;
@@ -118,24 +96,24 @@ public class Lz77Encoder {
                 }
                 if (data[candPos] != data[headStart]) continue; //fast bail on hash collision or mismatch
                 int limit = Math.min(maxMatchable, tailEnd - candPos);
-                matchLength = extendMatch(candPos, headStart, limit);
+                matchLength = extendMatch(data, candPos, headStart, limit);
                 matchDistance = cursor - candPos;
 
                 if (matchLength > bestLength) { //tracks best match across all candidates
                     bestLength = matchLength;
                     bestDistance = matchDistance;
-                    if (bestLength == this.maxMatch) break; //can't do better, early exit
+                    if (bestLength == maxMatch) break; //can't do better, early exit
                 }
             }
 
-            if (bestLength >= this.minMatch) { //we have a valid match
+            if (bestLength >= minMatch) { //we have a valid match
                 bitMask |= (1 << bitIndex);
                 encoded[encodedCursor++] = (byte) ((bestDistance >> 8) & 0xFF);
                 encoded[encodedCursor++] = (byte) (bestDistance & 0xFF);
                 encoded[encodedCursor++] = (byte) (bestLength & 0xFF);
                 step = bestLength;
             } else { //we have a literal
-                encoded[encodedCursor++] = (byte) (this.data[cursor] & 0xFF);
+                encoded[encodedCursor++] = (byte) (data[cursor] & 0xFF);
                 step = 1;
             }
 
@@ -149,15 +127,15 @@ public class Lz77Encoder {
                 bitIndex = 0;
             }
 
-            if ((cursor + 2) < this.data.length) { //lazy insertion — only index cursor position, not entire match
+            if ((cursor + 2) < data.length) { //lazy insertion — only index cursor position, not entire match
                 int count = index[slotBase];
-                if (count < this.maxCandidates) {
+                if (count < maxCandidates) {
                     count++;
                     index[slotBase + count] = cursor;
                     index[slotBase] = count;
                 } else {
-                    System.arraycopy(index, slotBase + 2, index, slotBase + 1, this.maxCandidates - 1);
-                    index[slotBase + this.maxCandidates] = cursor;
+                    System.arraycopy(index, slotBase + 2, index, slotBase + 1, maxCandidates - 1);
+                    index[slotBase + maxCandidates] = cursor;
                 }
             }
 
@@ -165,5 +143,31 @@ public class Lz77Encoder {
         }
         encoded[maskPosition] = (byte) bitMask; //write bitMask that is remaining after loop finishes
         return Arrays.copyOf(encoded, encodedCursor); //convert to byte[] for output
+    }
+
+    private static int hash(byte[] data, int cursor) { //knuth multiplicative hash over 3 bytes into table index
+        int v = (data[cursor] & 0xFF)
+              | ((data[cursor + 1] & 0xFF) << 8)
+              | ((data[cursor + 2] & 0xFF) << 16);
+        return (v * 0x9E3779B1) >>> (32 - TABLE_BITS) & TABLE_MASK;
+    }
+
+    private static int extendMatch(byte[] data, int candPos, int headStart, int limit) {
+        int j = 0;
+        while (j + 8 <= limit) { //compare 8 bytes at a time as a long
+            long a = (long) LONG_VIEW.get(data, candPos + j);
+            long b = (long) LONG_VIEW.get(data, headStart + j);
+            if (a != b) {
+                //find first differing byte within this long via trailing zero bits
+                j += Long.numberOfTrailingZeros(a ^ b) >> 3;
+                return j;
+            }
+            j += 8;
+        }
+        while (j < limit) { //byte by byte for the remaining tail
+            if (data[candPos + j] != data[headStart + j]) break;
+            j++;
+        }
+        return j;
     }
 }

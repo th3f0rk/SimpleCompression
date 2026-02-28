@@ -2,35 +2,32 @@ import java.util.Arrays;
 
 public class RleEncoder {
 
-    private byte[] data;
-
-    public RleEncoder (byte[] data) {
-        this.data = data;
-    }
+    private RleEncoder() {}
 
     /** this is the encode method. it does PackBits style RLE encoding
      *
-     * @return encoded - returns an RLE encoded byte array
+     * @param data the raw byte array to compress
+     * @return an RLE encoded byte array
      */
-    public byte[] encode() {
-        int originalBytes = this.data.length;
+    public static byte[] encode(byte[] data) {
+        int originalBytes = data.length;
         int runCount = 0;
         int literalCount = 0;
         int tail = 0;
 
         boolean isRunning = false;
 
-        byte[] out = new byte[this.data.length + (this.data.length / 128) + 3];
+        byte[] out = new byte[data.length + (data.length / 128) + 3];
         int pos = 0;
         byte[] slip = new byte[128];
 
-        if (this.data.length == 0) {
+        if (data.length == 0) {
             throw new IllegalArgumentException("there is no data to compress. the bytearray passed is empty.");
         }
 
-        for (int i = 0; i < this.data.length; i++) {
+        for (int i = 0; i < data.length; i++) {
             boolean lastPass = (i == originalBytes - 1);
-            byte current = this.data[i];
+            byte current = data[i];
 
             if (i == 0) {
                 slip[0] = current;
@@ -78,7 +75,7 @@ public class RleEncoder {
                 if (current == slip[tail]) {
                     int remaining = Math.min(128 - runCount, originalBytes - i);
                     int j = 0;
-                    while (j < remaining && this.data[i + j] == slip[tail]) { j++; }
+                    while (j < remaining && data[i + j] == slip[tail]) { j++; }
                     runCount += j;
                     i += j - 1;
                     lastPass = (i == originalBytes - 1);
@@ -113,7 +110,7 @@ public class RleEncoder {
 
                     int remaining = Math.min(128 - runCount, originalBytes - 1 - i);
                     int j = 0;
-                    while (j < remaining && this.data[i + 1 + j] == current) { j++; }
+                    while (j < remaining && data[i + 1 + j] == current) { j++; }
                     runCount += j;
                     i += j;
                     lastPass = (i == originalBytes - 1);

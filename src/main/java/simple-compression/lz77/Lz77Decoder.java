@@ -1,13 +1,15 @@
 import java.util.Arrays;
 
 public class Lz77Decoder {
-    private byte[] data;
 
-    public Lz77Decoder(byte[] data) {
-        this.data = data;
-    }
+    private Lz77Decoder() {}
 
-    public byte[] decode() {
+    /** this is the decode method. it takes LZ77 encoded data and reconstructs the original bytes
+     *
+     * @param data the LZ77 encoded byte array to decompress
+     * @return the original uncompressed byte array
+     */
+    public static byte[] decode(byte[] data) {
         int cursor = 0;
         int bitMask = 0;
         int bitIndex = 0;
@@ -16,20 +18,24 @@ public class Lz77Decoder {
         int copyStart = 0;
         int decodedCursor = 0;
 
-        byte[] decoded = new byte[this.data.length * 4];
+        byte[] decoded = new byte[data.length * 4];
 
-        while (cursor < this.data.length) {
+        if (data.length == 0) {
+            throw new IllegalArgumentException("there is no data to decompress. the bytearray passed is empty.");
+        }
+
+        while (cursor < data.length) {
             if (bitIndex == 0) { //read next bitmask byte
-                bitMask = this.data[cursor++] & 0xFF;
+                bitMask = data[cursor++] & 0xFF;
             }
 
-            if (cursor >= this.data.length) break; //trailing bitmask with unused zero bits
+            if (cursor >= data.length) break; //trailing bitmask with unused zero bits
 
             if ((bitMask & (1 << bitIndex)) != 0) { //match
-                int high = this.data[cursor++] & 0xFF;
-                int low = this.data[cursor++] & 0xFF;
+                int high = data[cursor++] & 0xFF;
+                int low = data[cursor++] & 0xFF;
                 distance = (high << 8) | low;
-                length = this.data[cursor++] & 0xFF;
+                length = data[cursor++] & 0xFF;
 
                 copyStart = decodedCursor - distance;
 
@@ -44,7 +50,7 @@ public class Lz77Decoder {
                 if (decodedCursor >= decoded.length) { //grow buffer if needed
                     decoded = Arrays.copyOf(decoded, decoded.length * 2);
                 }
-                decoded[decodedCursor++] = (byte) (this.data[cursor++] & 0xFF);
+                decoded[decodedCursor++] = (byte) (data[cursor++] & 0xFF);
             }
 
             bitIndex = (bitIndex + 1) & 7;
@@ -53,4 +59,3 @@ public class Lz77Decoder {
         return Arrays.copyOf(decoded, decodedCursor);
     }
 }
-
